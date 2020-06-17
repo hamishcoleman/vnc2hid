@@ -196,6 +196,7 @@ class VNCProto():
                 0xff9a: 97, 0xffb9: 97,  # KP 9
                 0xff9e: 98, 0xffb0: 98,  # KP 0
                 0xff9f: 99, 0xffae: 99,  # KP .
+                0xff67: 101,    # Property key right
             }
             if key in xlat:
                 usbkey = xlat[key]
