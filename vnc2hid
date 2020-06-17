@@ -235,9 +235,12 @@ class VNCProto():
 
         return True
 
-    def recv_PointerEvent(self):
+    def recv_PointerEvent_rel(self):
         buf = self.rfile.read(5)
         buttons, x, y = struct.unpack("!BHH", buf)
+
+        # TODO:
+        # - extract wheel events from buttons
 
         delta_x = x - self.mouse_x
         delta_y = y - self.mouse_y
@@ -270,6 +273,40 @@ class VNCProto():
         print("Mouse ({}) {} {} {}".format(
             binascii.hexlify(report),
             overflow,
+            x, y,
+        ))
+
+        global hid_mouse_fh
+        if hid_mouse_fh is not None:
+            hid_mouse_fh.write(report)
+            hid_mouse_fh.flush()
+
+        return True
+
+    def recv_PointerEvent(self):
+        buf = self.rfile.read(5)
+        buttons, x, y = struct.unpack("!BHH", buf)
+
+        usb_buttons = buttons & 1 | (buttons & 2)<<1 | (buttons & 4)>>1
+
+        wheel = 0
+        if buttons & 0x08:
+            wheel = 1
+        if buttons & 0x10:
+            wheel = -1
+
+        # TODO:
+        # - calculate the scaling factor just once
+
+        global width
+        global height
+        scaled_x = int(32768/width) *x
+        scaled_y = int(32768/height) *y
+
+        report = struct.pack("<BHHb", usb_buttons, scaled_x, scaled_y, wheel)
+
+        print("Mouse ({}) {} {}".format(
+            binascii.hexlify(report),
             x, y,
         ))
 
