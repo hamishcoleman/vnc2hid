@@ -2,7 +2,7 @@
 """vnc2hid: A VNC server that extracts the HID events
 
 Usage:
-    vnc2hid <port> <width> <height> <keyboard>
+    vnc2hid <port> <width> <height> [keyboard] [mouse]
 """
 
 import sys
@@ -272,6 +272,12 @@ class VNCProto():
             overflow,
             x, y,
         ))
+
+        global hid_mouse_fh
+        if hid_mouse_fh is not None:
+            hid_mouse_fh.write(report)
+            hid_mouse_fh.flush()
+
         return True
 
     def recv_ClientCutText(self):
@@ -360,6 +366,12 @@ def main():
     if len(sys.argv):
         hid_key = sys.argv.pop(0)
         hid_key_fh = open(hid_key, "wb")
+
+    global hid_mouse_fh
+
+    if len(sys.argv):
+        hid_mouse = sys.argv.pop(0)
+        hid_mouse_fh = open(hid_mouse, "wb")
 
     # bind address
     host = ''
