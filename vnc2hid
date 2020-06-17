@@ -44,9 +44,11 @@ class VNCHandler(socketserver.BaseRequestHandler):
         self.request.sendall(b"\x01\x00\x01\x00\x20\x18\x00\xff\x00\xff\x00\xff\x00\xff\x10\x08\x00\x00\x00\x00\x00\x00\x00\x03hid")
 
         # We should now be dealing with messages
-        msg = True
-        while (msg):
+        while (True):
             msg = self.request.recv(2048)
+            if not msg:
+                return
+
             number = msg[0]
 
             print("msg{} len={}".format(number, len(msg)))
