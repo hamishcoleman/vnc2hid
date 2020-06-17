@@ -2,7 +2,7 @@
 """vnc2hid: A VNC server that extracts the HID events
 
 Usage:
-    vnc2hid <port> <width> <height>
+    vnc2hid <port> <width> <height> <keyboard>
 """
 
 import sys
@@ -227,6 +227,12 @@ class VNCProto():
             binascii.hexlify(report),
             downstr, key, self.keys_shift
         ))
+
+        global hid_key_fh
+        if hid_key_fh is not None:
+            hid_key_fh.write(report)
+            hid_key_fh.flush()
+
         return True
 
     def recv_PointerEvent(self):
@@ -348,6 +354,12 @@ def main():
     except ValueError:
         print("Invalid integer argument")
         return 1
+
+    global hid_key_fh
+
+    if len(sys.argv):
+        hid_key = sys.argv.pop(0)
+        hid_key_fh = open(hid_key, "wb")
 
     # bind address
     host = ''
