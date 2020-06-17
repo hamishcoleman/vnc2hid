@@ -8,6 +8,7 @@ Usage:
 import sys
 import socketserver
 import struct
+import binascii
 
 
 class Server(socketserver.TCPServer):
@@ -110,9 +111,37 @@ class VNCProto():
 
         delta_x = x - self.mouse_x
         delta_y = y - self.mouse_y
-        self.mouse_x = x
-        self.mouse_y = y
-        print("Mouse {} {} {} ({} {})".format(buttons, x, y, delta_x, delta_y))
+
+        overflow=False
+        if delta_x > 127:
+            overflow=True
+            delta_x = 127
+        elif delta_x < -128:
+            overflow=True
+            delta_x = -128
+
+        if delta_y > 127:
+            overflow=True
+            delta_y = 127
+        elif delta_y < -128:
+            overflow=True
+            delta_y = -128
+
+        self.mouse_x += delta_x
+        self.mouse_y += delta_y
+
+        if overflow:
+            # The only overflow seen so far appears to be entering/exiting
+            # the x2vnc window.  Lets just ignore that one
+            delta_x = 0
+            delta_y = 0
+        report = struct.pack("!Bbb", buttons, delta_x, delta_y)
+
+        print("Mouse ({}) {} {} {}".format(
+            binascii.hexlify(report),
+            overflow,
+            x, y,
+        ))
         return True
 
     def recv_ClientCutText(self):
