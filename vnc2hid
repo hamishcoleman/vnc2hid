@@ -2,7 +2,7 @@
 """vnc2hid: A VNC server that extracts the HID events
 
 Usage:
-    vnc2hid <port>
+    vnc2hid <port> <width> <height>
 """
 
 import sys
@@ -60,8 +60,8 @@ class VNCProto():
         return None
 
     def sendServerInit(self):
-        width = 256
-        height = 256
+        global width
+        global height
         bpp = 32
         depth = 24
         bigendian = False
@@ -158,20 +158,32 @@ class VNCHandler(socketserver.StreamRequestHandler):
         self.vnc.sendServerInit()
         self.vnc.handle()
 
+
 def main():
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 4:
         print(__doc__)
         return 0
 
     sys.argv.pop(0)
-    host = ''
-    port = sys.argv.pop(0)
+
+    # TODO
+    # - we should have a global object that handles screen-side details
+    # - each client connection should have an object that handles protocol
+    #   differences and then just references the screen-side details
+    # - the global screen object then should have the width and height..
+    global width
+    global height
 
     try:
-        port = int(port)
+        port = int(sys.argv.pop(0))
+        width = int(sys.argv.pop(0))
+        height = int(sys.argv.pop(0))
     except ValueError:
-        print("Invalid port:", port)
+        print("Invalid integer argument")
         return 1
+
+    # bind address
+    host = ''
 
     with Server((host, port), VNCHandler) as server:
         server.serve_forever()
