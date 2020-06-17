@@ -19,6 +19,8 @@ class VNCProto():
     def __init__(self, rfile, wfile):
         self.rfile = rfile
         self.wfile = wfile
+        self.mouse_x = 0
+        self.mouse_y = 0
 
     def handle(self):
         # We should now be dealing with messages
@@ -105,7 +107,12 @@ class VNCProto():
     def recv_PointerEvent(self):
         buf = self.rfile.read(5)
         buttons, x, y = struct.unpack("!BHH",buf)
-        print("Mouse {} {} {}".format(buttons, x, y))
+
+        delta_x = x - self.mouse_x
+        delta_y = y - self.mouse_y
+        self.mouse_x = x
+        self.mouse_y = y
+        print("Mouse {} {} {} ({} {})".format(buttons, x, y, delta_x, delta_y))
         return True
 
     def recv_ClientCutText(self):
