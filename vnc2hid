@@ -123,18 +123,98 @@ class VNCProto():
                 self.keys_shift &= ~keysym_shift[key]
 
         else:
-            # handle normal keys
+            # handle non shift keys
 
-            # TODO:
-            # translate from lower to upper
-            # translate special keys to HID keys
+            xlat = {
+                ord('!'): 30,
+                ord('@'): 31,
+                ord('#'): 32,
+                ord('$'): 33,
+                ord('%'): 34,
+                ord('^'): 35,
+                ord('&'): 36,
+                ord('*'): 37,
+                ord('('): 38,
+                ord(')'): 39, ord('0'): 39,
+                0xff0d: 40,  # Enter
+                0xff1b: 41,  # ESC
+                0xff08: 42,  # Backspace
+                0xff09: 43,  # Tab
+                ord(' '): 44,
+                ord('-'): 45, ord('_'): 45,
+                ord('='): 46, ord('+'): 46,
+                ord('['): 47, ord('{'): 47,
+                ord(']'): 48, ord('}'): 48,
+                ord('\\'): 49, ord('|'): 49,
+                # 50?
+                ord(';'): 51, ord(':'): 51,
+                ord("'"): 52, ord('"'): 52,
+                ord('`'): 53, ord('~'): 53,
+                ord(','): 54, ord('<'): 54,
+                ord('.'): 55, ord('>'): 55,
+                ord('/'): 56, ord('?'): 56,
+                0xffe5: 57,  # capslock
+                0xffbe: 58,  # F1
+                0xffbf: 59,  # F2
+                0xffc0: 60,  # F3
+                0xffc1: 61,  # F4
+                0xffc2: 62,  # F5
+                0xffc3: 63,  # F6
+                0xffc4: 64,  # F7
+                0xffc5: 65,  # F8
+                0xffc6: 66,  # F9
+                0xffc7: 67,  # F10
+                0xffc8: 68,  # F11
+                0xffc9: 69,  # F12
+                0xff61: 70,  # PrScr
+                0xff14: 71,  # ScLk
+                0xff13: 72,  # Pause
+                0xff63: 73,  # Ins
+                0xff50: 74,  # Home
+                0xff55: 75,  # PgUp
+                0xffff: 76,  # Del
+                0xff57: 77,  # End
+                0xff56: 78,  # PgDn
+                0xff53: 79,  # Right
+                0xff51: 80,  # Left
+                0xff54: 81,  # Down
+                0xff52: 82,  # Up
+                0xff7f: 83,  # NumLk
+                0xffaf: 84,  # KP /
+                0xffaa: 85,  # KP *
+                0xffad: 86,  # KP -
+                0xffab: 87,  # KP +
+                0xff8d: 88,  # KP Enter
+                0xff9c: 89, 0xffb1: 89,  # KP 1
+                0xff99: 90, 0xffb2: 90,  # KP 2
+                0xff9b: 91, 0xffb3: 91,  # KP 3
+                0xff96: 92, 0xffb4: 92,  # KP 4
+                0xff9d: 93, 0xffb5: 93,  # KP 5
+                0xff98: 94, 0xffb6: 94,  # KP 6
+                0xff95: 95, 0xffb7: 95,  # KP 7
+                0xff97: 96, 0xffb8: 96,  # KP 8
+                0xff9a: 97, 0xffb9: 97,  # KP 9
+                0xff9e: 98, 0xffb0: 98,  # KP 0
+                0xff9f: 99, 0xffae: 99,  # KP .
+            }
+            if key in xlat:
+                usbkey = xlat[key]
+            elif key >= ord('A') and key <= ord('Z'):
+                usbkey = key - ord('A') + 4
+            elif key >= ord('a') and key <= ord('z'):
+                usbkey = key - ord('a') + 4
+            elif key >= ord('1') and key <= ord('9'):
+                usbkey = key - ord('1') + 30
+            else:
+                usbkey = 3
+                print("Unknown")
 
             if down:
-                if key not in self.keys:
-                    self.keys.append(key)
+                if usbkey not in self.keys:
+                    self.keys.append(usbkey)
             else:
-                if key in self.keys:
-                    self.keys.remove(key)
+                if usbkey in self.keys:
+                    self.keys.remove(usbkey)
 
         report = struct.pack("Bx6s", self.keys_shift, bytes(self.keys))
 
