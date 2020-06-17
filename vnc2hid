@@ -110,8 +110,8 @@ class VNCProto():
             0xffe2: 0x20,   # Shift right
             0xffe3: 0x01,   # Ctrl left
             0xffe4: 0x10,   # Ctrl right
-            0xffe7: 0x08,   # Meta left
-            0xffe8: 0x80,   # Meta right
+            0xffeb: 0x08,   # Win Left (Meta)
+            0xffec: 0x80,   # Win Right (Meta)
             0xffe9: 0x04,   # Alt left
             0xffea: 0x40,   # Alt right
         }
