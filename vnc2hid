@@ -52,7 +52,9 @@ class VNCProto():
             raise ValueError
 
         msgname = msgtypes[msgid]
-        print("{} {}".format(msgid, msgname))
+
+        # TODO: if verbose, show all packets?
+        # print("{} {}".format(msgid, msgname))
 
         handler = getattr(self, 'recv_'+msgname, None)
         if callable(handler):
@@ -95,11 +97,15 @@ class VNCProto():
         return True
 
     def recv_KeyEvent(self):
-        self.rfile.read(7)
+        buf = self.rfile.read(7)
+        down, key = struct.unpack("!?xxI",buf)
+        print("Key {} {}".format(down, key))
         return True
 
     def recv_PointerEvent(self):
-        self.rfile.read(5)
+        buf = self.rfile.read(5)
+        buttons, x, y = struct.unpack("!BHH",buf)
+        print("Mouse {} {} {}".format(buttons, x, y))
         return True
 
     def recv_ClientCutText(self):
