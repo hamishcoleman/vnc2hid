@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""vnc2hid: A VNC server that extracts the HID events
+
+Usage:
+    vnc2hid <port>
+"""
+
+import sys
+import socketserver
+
+class Server(socketserver.TCPServer):
+    """Just override the reuseaddr"""
+    allow_reuse_address = True
+
+class VNCHandler(socketserver.BaseRequestHandler):
+
+    def handle(self):
+        """Incoming connections end up here"""
+        print("New connection")
+
+        version=b"RFB 003.008\n"
+        # Send Server Version String
+        self.request.sendall(version)
+        # Recv Client Version String
+        got = self.request.recv(1024)
+        assert(version == got)
+
+        # Send Security Handshake
+        # list of 1 security type, it is 1=="None"
+        self.request.sendall(b"\x01\x01")
+        # Recv Chosen security type
+        got = self.request.recv(1)
+        assert(b"\x01" == got)
+
+        # Send SecurityResult
+        self.request.sendall(b"\x00\x00\x00\x00")
+
+        # Recv ClientInit
+        got = self.request.recv(1)
+        # we dont care what the sharing state is..
+
+        # Send ServerInit
+        # currently x=0x100, y=0x100
+        self.request.sendall(b"\x01\x00\x01\x00\x20\x18\x00\xff\x00\xff\x00\xff\x00\xff\x10\x08\x00\x00\x00\x00\x00\x00\x00\x03hid")
+
+        # We should now be dealing with messages
+        msg = True
+        while (msg):
+            msg = self.request.recv(2048)
+            number = msg[0]
+
+            print("msg{} len={}".format(number, len(msg)))
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        return 0
+
+    sys.argv.pop(0)
+    host = ''
+    port = sys.argv.pop(0)
+
+    try:
+        port = int(port)
+    except ValueError:
+        print("Invalid port:", port)
+        return 1
+
+    with Server((host, port), VNCHandler) as server:
+        server.serve_forever()
+
+if __name__ == "__main__":
+    sys.exit(main())
