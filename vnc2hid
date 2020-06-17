@@ -19,6 +19,13 @@ class VNCProto():
         self.rfile = rfile
         self.wfile = wfile
 
+    def handle(self):
+        # We should now be dealing with messages
+        while (True):
+            result = self.read()
+            if not result:
+                return
+
     def read(self):
         """Process incoming bytes."""
 
@@ -149,12 +156,7 @@ class VNCHandler(socketserver.StreamRequestHandler):
         # we dont care what the sharing state is..
 
         self.vnc.sendServerInit()
-
-        # We should now be dealing with messages
-        while (True):
-            result = self.vnc.read()
-            if not result:
-                return
+        self.vnc.handle()
 
 def main():
     if len(sys.argv) < 2:
