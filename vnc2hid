@@ -9,6 +9,7 @@ import sys
 import socketserver
 import struct
 
+
 class Server(socketserver.TCPServer):
     """Just override the reuseaddr"""
     allow_reuse_address = True
@@ -84,9 +85,9 @@ class VNCProto():
         return True
 
     def recv_SetEncodings(self):
-        self.rfile.read(1) # padding
-        count = int.from_bytes(self.rfile.read(2),'big')
-        self.rfile.read(count*4) # encoding list
+        self.rfile.read(1)  # padding
+        count = int.from_bytes(self.rfile.read(2), 'big')
+        self.rfile.read(count*4)  # encoding list
         return True
 
     def recv_FramebufferUpdateRequest(self):
@@ -102,8 +103,8 @@ class VNCProto():
         return True
 
     def recv_ClientCutText(self):
-        self.rfile.read(3) # padding
-        length = int.from_bytes(self.rfile.read(4),'big')
+        self.rfile.read(3)  # padding
+        length = int.from_bytes(self.rfile.read(4), 'big')
         self.rfile.read(length)
         return True
 
@@ -131,7 +132,7 @@ class VNCProto8(VNCProto):
 class VNCHandler(socketserver.StreamRequestHandler):
 
     def _doVersion(self):
-        version=b"RFB 003.008\n"
+        version = b"RFB 003.008\n"
         self.wfile.write(version)
 
         got = self.rfile.readline().strip()
@@ -187,6 +188,7 @@ def main():
 
     with Server((host, port), VNCHandler) as server:
         server.serve_forever()
+
 
 if __name__ == "__main__":
     sys.exit(main())
