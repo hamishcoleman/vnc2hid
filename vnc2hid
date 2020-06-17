@@ -7,41 +7,86 @@ Usage:
 
 import sys
 import socketserver
+import struct
 
 class Server(socketserver.TCPServer):
     """Just override the reuseaddr"""
     allow_reuse_address = True
 
+
+class VNCProto():
+    def __init__(self, sock):
+        self.sock = sock
+
+    def sendServerInit(self):
+        width = 256
+        height = 256
+        bpp = 32
+        depth = 24
+        bigendian = False
+        truecolor = True
+        name = bytes('hid', 'utf8')
+
+        buf = struct.pack(
+            '!HHBB??HHHBBBxxxL',
+            width, height, bpp, depth, bigendian,
+            truecolor,
+            255, 255, 255,  # rgb max
+            16, 8, 0,       # rgb shift
+            len(name)
+        )
+        buf += name
+        self.sock.sendall(buf)
+
+
+class VNCProto3(VNCProto):
+    def doSecurityHandshake(self):
+        # 1==no authentication
+        self.sock.sendall(b"\x00\x00\x00\x01")
+
+
+class VNCProto8(VNCProto):
+    def doSecurityHandshake(self):
+        # Send Security Handshake
+        # list of 1 security type, it is 1=="None"
+        self.sock.sendall(b"\x01\x01")
+
+        # Recv Chosen security type
+        got = self.sock.recv(1024)
+        assert(b"\x01" == got)
+
+        # Send SecurityResult
+        self.sock.sendall(b"\x00\x00\x00\x00")
+
+
 class VNCHandler(socketserver.BaseRequestHandler):
+
+    def _doVersion(self):
+        version=b"RFB 003.008\n"
+        self.request.sendall(version)
+
+        got = self.request.recv(1024).strip()
+        print("Client Version:{}", got)
+
+        if (got == b'RFB 003.008'):
+            self.vnc = VNCProto8(self.request)
+            return
+
+        # The standard says "if you dont know the proto, it is probably 3.3"
+        self.vnc = VNCProto3(self.request)
 
     def handle(self):
         """Incoming connections end up here"""
         print("New connection")
 
-        version=b"RFB 003.008\n"
-        # Send Server Version String
-        self.request.sendall(version)
-        # Recv Client Version String
-        got = self.request.recv(1024)
-        assert(version == got)
-
-        # Send Security Handshake
-        # list of 1 security type, it is 1=="None"
-        self.request.sendall(b"\x01\x01")
-        # Recv Chosen security type
-        got = self.request.recv(1)
-        assert(b"\x01" == got)
-
-        # Send SecurityResult
-        self.request.sendall(b"\x00\x00\x00\x00")
+        self._doVersion()
+        self.vnc.doSecurityHandshake()
 
         # Recv ClientInit
-        got = self.request.recv(1)
+        self.request.recv(1)
         # we dont care what the sharing state is..
 
-        # Send ServerInit
-        # currently x=0x100, y=0x100
-        self.request.sendall(b"\x01\x00\x01\x00\x20\x18\x00\xff\x00\xff\x00\xff\x00\xff\x10\x08\x00\x00\x00\x00\x00\x00\x00\x03hid")
+        self.vnc.sendServerInit()
 
         # We should now be dealing with messages
         while (True):
