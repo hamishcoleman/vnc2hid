@@ -22,6 +22,8 @@ class VNCProto():
         self.wfile = wfile
         self.mouse_x = 0
         self.mouse_y = 0
+        self.keys_shift = 0
+        self.keys = []
 
     def handle(self):
         # We should now be dealing with messages
@@ -102,7 +104,48 @@ class VNCProto():
     def recv_KeyEvent(self):
         buf = self.rfile.read(7)
         down, key = struct.unpack("!?xxI",buf)
-        print("Key {} {}".format(down, key))
+
+        keysym_shift = {
+            0xffe1: 0x02,   # Shift left
+            0xffe2: 0x20,   # Shift right
+            0xffe3: 0x01,   # Ctrl left
+            0xffe4: 0x10,   # Ctrl right
+            0xffe7: 0x08,   # Meta left
+            0xffe8: 0x80,   # Meta right
+            0xffe9: 0x04,   # Alt left
+            0xffea: 0x40,   # Alt right
+        }
+        if key in keysym_shift:
+            # handle shift keys
+            if down:
+                self.keys_shift |= keysym_shift[key]
+            else:
+                self.keys_shift &= ~keysym_shift[key]
+
+        else:
+            # handle normal keys
+
+            # TODO:
+            # translate from lower to upper
+            # translate special keys to HID keys
+
+            if down:
+                if key not in self.keys:
+                    self.keys.append(key)
+            else:
+                if key in self.keys:
+                    self.keys.remove(key)
+
+        report = struct.pack("Bx6s", self.keys_shift, bytes(self.keys))
+
+        if down:
+            downstr = "Down"
+        else:
+            downstr = "Up  "
+        print("Key ({}) {} 0x{:04x}".format(
+            binascii.hexlify(report),
+            downstr, key, self.keys_shift
+        ))
         return True
 
     def recv_PointerEvent(self):
