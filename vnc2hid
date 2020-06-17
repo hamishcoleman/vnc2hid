@@ -103,7 +103,7 @@ class VNCProto():
 
     def recv_KeyEvent(self):
         buf = self.rfile.read(7)
-        down, key = struct.unpack("!?xxI",buf)
+        down, key = struct.unpack("!?xxI", buf)
 
         keysym_shift = {
             0xffe1: 0x02,   # Shift left
@@ -230,24 +230,24 @@ class VNCProto():
 
     def recv_PointerEvent(self):
         buf = self.rfile.read(5)
-        buttons, x, y = struct.unpack("!BHH",buf)
+        buttons, x, y = struct.unpack("!BHH", buf)
 
         delta_x = x - self.mouse_x
         delta_y = y - self.mouse_y
 
-        overflow=False
+        overflow = False
         if delta_x > 127:
-            overflow=True
+            overflow = True
             delta_x = 127
         elif delta_x < -128:
-            overflow=True
+            overflow = True
             delta_x = -128
 
         if delta_y > 127:
-            overflow=True
+            overflow = True
             delta_y = 127
         elif delta_y < -128:
-            overflow=True
+            overflow = True
             delta_y = -128
 
         self.mouse_x += delta_x
