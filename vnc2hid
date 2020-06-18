@@ -6,33 +6,21 @@ Usage:
 """
 
 import sys
-import socketserver
+import selectors
+import socket
+
 import struct
 import binascii
 
 
-class Server(socketserver.TCPServer):
-    """Just override the reuseaddr"""
-    allow_reuse_address = True
-
-
 class VNCProto():
-    def __init__(self, rfile, wfile):
-        self.rfile = rfile
-        self.wfile = wfile
+    def __init__(self):
         self.mouse_x = 0
         self.mouse_y = 0
         self.keys_shift = 0
         self.keys = []
 
-    def handle(self):
-        # We should now be dealing with messages
-        while (True):
-            result = self.read()
-            if not result:
-                return
-
-    def read(self):
+    def read(self, conn):
         """Process incoming bytes."""
 
         msgtypes = {
@@ -44,7 +32,7 @@ class VNCProto():
             6: 'ClientCutText',
         }
 
-        buf = self.rfile.read(1)
+        buf = conn.recv(1)
         if not buf:
             return None
         msgid = ord(buf)
@@ -63,11 +51,11 @@ class VNCProto():
 
         handler = getattr(self, 'recv_'+msgname, None)
         if callable(handler):
-            return handler()
+            return handler(conn)
 
         return None
 
-    def sendServerInit(self):
+    def sendServerInit(self, conn):
         global width
         global height
         bpp = 32
@@ -85,24 +73,24 @@ class VNCProto():
             len(name)
         )
         buf += name
-        self.wfile.write(buf)
+        conn.send(buf)
 
-    def recv_SetPixelFormat(self):
-        self.rfile.read(19)
+    def recv_SetPixelFormat(self, conn):
+        conn.recv(19)
         return True
 
-    def recv_SetEncodings(self):
-        self.rfile.read(1)  # padding
-        count = int.from_bytes(self.rfile.read(2), 'big')
-        self.rfile.read(count*4)  # encoding list
+    def recv_SetEncodings(self, conn):
+        conn.recv(1)  # padding
+        count = int.from_bytes(conn.recv(2), 'big')
+        conn.recv(count*4)  # encoding list
         return True
 
-    def recv_FramebufferUpdateRequest(self):
-        self.rfile.read(9)
+    def recv_FramebufferUpdateRequest(self, conn):
+        conn.recv(9)
         return True
 
-    def recv_KeyEvent(self):
-        buf = self.rfile.read(7)
+    def recv_KeyEvent(self, conn):
+        buf = conn.recv(7)
         down, key = struct.unpack("!?xxI", buf)
 
         keysym_shift = {
@@ -235,8 +223,8 @@ class VNCProto():
 
         return True
 
-    def recv_PointerEvent_rel(self):
-        buf = self.rfile.read(5)
+    def recv_PointerEvent_rel(self, conn):
+        buf = conn.recv(5)
         buttons, x, y = struct.unpack("!BHH", buf)
 
         # TODO:
@@ -283,8 +271,8 @@ class VNCProto():
 
         return True
 
-    def recv_PointerEvent(self):
-        buf = self.rfile.read(5)
+    def recv_PointerEvent(self, conn):
+        buf = conn.recv(5)
         buttons, x, y = struct.unpack("!BHH", buf)
 
         usb_buttons = buttons & 1 | (buttons & 2)<<1 | (buttons & 4)>>1
@@ -317,62 +305,74 @@ class VNCProto():
 
         return True
 
-    def recv_ClientCutText(self):
-        self.rfile.read(3)  # padding
-        length = int.from_bytes(self.rfile.read(4), 'big')
-        self.rfile.read(length)
+    def recv_ClientCutText(self, conn):
+        conn.recv(3)  # padding
+        length = int.from_bytes(conn.recv(4), 'big')
+        conn.recv(length)
         return True
 
 
-class VNCProto3(VNCProto):
-    def doSecurityHandshake(self):
+class VNCProto3():
+    def doSecurityHandshake(self, conn):
         # 1==no authentication
-        self.wfile.write(b"\x00\x00\x00\x01")
+        conn.send(b"\x00\x00\x00\x01")
 
 
-class VNCProto8(VNCProto):
-    def doSecurityHandshake(self):
+class VNCProto8():
+    def doSecurityHandshake(self, conn):
         # Send Security Handshake
         # list of 1 security type, it is 1=="None"
-        self.wfile.write(b"\x01\x01")
+        conn.send(b"\x01\x01")
 
         # Recv Chosen security type
-        got = self.rfile.read(1)
+        got = conn.recv(1)
         assert(b"\x01" == got)
 
         # Send SecurityResult
-        self.wfile.write(b"\x00\x00\x00\x00")
+        conn.send(b"\x00\x00\x00\x00")
 
 
-class VNCHandler(socketserver.StreamRequestHandler):
+sel = selectors.DefaultSelector()
+vnc = VNCProto()
+hid_key_fh = None
+hid_mouse_fh = None
 
-    def _doVersion(self):
-        version = b"RFB 003.008\n"
-        self.wfile.write(version)
+def _doVersion(conn):
+    """Send and Recv the client/server versions"""
+    version = b"RFB 003.008\n"
+    conn.send(version)
 
-        got = self.rfile.readline().strip()
-        print("Client Version:{}", got)
+    # TODO: blocks waiting for response
+    got = conn.recv(1024).strip()
+    print("Client Version:{}", got)
 
-        if (got == b'RFB 003.008'):
-            self.vnc = VNCProto8(self.rfile, self.wfile)
-            return
+    if (got == b'RFB 003.008'):
+        return VNCProto8()
 
-        # The standard says "if you dont know the proto, it is probably 3.3"
-        self.vnc = VNCProto3(self.rfile, self.wfile)
+    # The standard says "if you dont know the proto, it is probably 3.3"
+    return VNCProto3()
 
-    def handle(self):
-        """Incoming connections end up here"""
-        print("New connection")
 
-        self._doVersion()
-        self.vnc.doSecurityHandshake()
+def accept(sock, mask):
+    conn, addr = sock.accept()
 
-        # Recv ClientInit
-        self.rfile.read(1)
-        # we dont care what the sharing state is..
+    auth = _doVersion(conn)
+    auth.doSecurityHandshake(conn)
 
-        self.vnc.sendServerInit()
-        self.vnc.handle()
+    # Recv ClientInit
+    conn.recv(1)
+    # we dont care what the sharing state is..
+
+    vnc.sendServerInit(conn)
+
+    # conn.setblocking(False)
+    sel.register(conn, selectors.EVENT_READ, read)
+
+
+def read(conn, mask):
+    result = vnc.read(conn)
+    if not result:
+        sel.unregister(conn)
 
 
 def main():
@@ -413,8 +413,19 @@ def main():
     # bind address
     host = ''
 
-    with Server((host, port), VNCHandler) as server:
-        server.serve_forever()
+    sock = socket.socket()
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, port))
+    sock.listen(3)
+    sock.setblocking(False)
+
+    sel.register(sock, selectors.EVENT_READ, accept)
+
+    while True:
+        events = sel.select()
+        for key, mask in events:
+            callback = key.data
+            callback(key.fileobj, mask)
 
 
 if __name__ == "__main__":
