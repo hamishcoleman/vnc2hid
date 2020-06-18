@@ -34,6 +34,7 @@ Run the `./vnc2hid` program with no options to get a simple usage summary.
 Determine the correct options and start it.
 
 Eg: For a host with a 1080p screen resolution, use:
+
     ./vnc2hid 5900 1920 1080 /dev/hidg0 /dev/hidg1
 
 Connect to your device with a vncviewer.  You will only see a black screen,
