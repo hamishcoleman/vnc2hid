@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Tear down a configured gadget - allowing config tweaks and a re-run of the
+# setup_udc_hid command
+
+GADGET=g1
+
+if [ -z "$1" ]; then
+    echo need UDC name
+    exit 1
+fi
+UDC="$1"
+shift
+
+cd /sys/kernel/config/usb_gadget
+cd "$GADGET"
+echo "" >UDC
+rmdir strings/0x409/
+rmdir configs/c.1/strings/0x409
+rm -f configs/c.1/hid.usb*
+rmdir configs/c.1
+rmdir functions/*
+cd ..
+rmdir "$GADGET"
+
+

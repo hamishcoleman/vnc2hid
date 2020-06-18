@@ -1,0 +1,110 @@
+#!/bin/sh
+#
+# Setup a USB Device gadget to act as a HID keyboard and mouse
+#
+# This could be called from udev
+#
+
+# Some default settings to make us look like a real device
+ID_VEND=0x04b3  # IBM
+ID_PROD=0x3025  # NetVista Full Width Keyboard
+MANU="LITE-ON Technology"
+PROD="USB NetVista Full Width Keyboard."
+VERS=0x0109
+
+# This descriptor copied from a real keyboard
+DESC_KEY="
+ 05 01 09 06 a1 01 05 07 19 e0 29 e7 15 00 25 01
+ 75 01 95 08 81 02 95 01 75 08 81 03 95 05 75 01
+ 05 08 19 01 29 05 91 02 95 01 75 03 91 03 95 06
+ 75 08 15 00 25 65 05 07 19 00 29 65 81 00 c0
+"
+
+# This descriptor copied the QEMU tablet device
+DESC_MOUSE="
+ 05 01 09 02 A1 01 09 01 A1 00 05 09 19 01 29 03
+ 15 00 25 01 95 03 75 01 81 02 95 01 75 05 81 01
+ 05 01 09 30 09 31 15 00 26 FF 7F 35 00 46 FF 7F
+ 75 10 95 02 81 02 05 01 09 38 15 81 25 7F 35 00
+ 45 00 75 08 95 01 81 06 C0 C0
+"
+
+if [ -z "$1" ]; then
+    echo need UDC device name
+    echo
+    LIST=$(ls /sys/class/udc/ 2>/dev/null)
+    if [ -z "$LIST" ]; then
+        echo "This system has no UDC devices (is the right module loaded)"
+    else
+        echo "One of the following can be used:"
+        echo
+        echo "$LIST"
+        echo
+    fi
+    exit 1
+fi
+UDC="$1"
+shift
+
+set -e
+
+modprobe libcomposite
+cd /sys/kernel/config/usb_gadget/
+
+GADGET=g1       # our gadget internal name
+
+if [ -e "$GADGET" ]; then
+    echo "Error: $PWD/$GADGET already exists"
+    exit 1
+fi
+
+mkdir "$GADGET"
+cd "$GADGET"
+
+# bDeviceClass:0x00
+# bDeviceProtocol:0x00
+# bDeviceSubClass:0x00
+echo 8          > bMaxPacketSize0
+echo "$VERS"    > bcdDevice
+echo 0x0200     > bcdUSB    # USB2 - note a real keyboard would be 0110 
+echo "$ID_VEND" > idVendor
+echo "$ID_PROD" > idProduct
+
+mkdir -p strings/0x409      # English language strings
+echo "$MANU"    > strings/0x409/manufacturer
+echo "$PROD"    > strings/0x409/product
+
+mkdir -p configs/c.1
+echo 250        > configs/c.1/MaxPower # basically, a lie
+# bmAttributes:0x80
+
+# configure Keyboard
+mkdir -p functions/hid.usb0
+echo 1          > functions/hid.usb0/protocol # keyboard
+echo 8          > functions/hid.usb0/report_length
+echo 1          > functions/hid.usb0/subclass # boot interface
+for i in $DESC_KEY; do /usr/bin/printf "\x$i"; done >/tmp/desc_key
+cat /tmp/desc_key > functions/hid.usb0/report_desc
+
+# configure Mouse
+mkdir -p functions/hid.usb1
+echo 2          > functions/hid.usb1/protocol # mouse
+echo 6          > functions/hid.usb1/report_length
+echo 1          > functions/hid.usb1/subclass # boot interface
+for i in $DESC_MOUSE; do /usr/bin/printf "\x$i"; done >/tmp/desc_mouse
+cat /tmp/desc_mouse > functions/hid.usb1/report_desc
+
+# TODO: since we are using a tablet device with a wheel, is "boot interface"
+# actually correct?
+
+# Could keep adding add other sub-devices as well
+# eg:
+# mkdir -p functions/acm.usb0
+# mkdir -p functions/eem.usb0
+# mkdir -p functions/mass_storage.usb0
+
+# Add all the functions to our only config
+ln -s functions/* configs/c.1/
+
+# Publish the device to our host
+basename "$UDC" >UDC
