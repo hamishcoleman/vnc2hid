@@ -305,9 +305,9 @@ class VNCProto():
 
         report = struct.pack("<BHHb", usb_buttons, scaled_x, scaled_y, wheel)
 
-        print("Mouse ({}) {} {}".format(
+        print("Mouse ({}) {} {} {}".format(
             binascii.hexlify(report),
-            x, y,
+            x, y, buttons
         ))
 
         global hid_mouse_fh
