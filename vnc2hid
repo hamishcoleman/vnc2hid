@@ -73,7 +73,7 @@ class VNCProto():
             len(name)
         )
         buf += name
-        conn.send(buf)
+        conn.sendall(buf)
 
     def recv_SetPixelFormat(self, conn):
         conn.recv(19)
@@ -315,21 +315,21 @@ class VNCProto():
 class VNCProto3():
     def doSecurityHandshake(self, conn):
         # 1==no authentication
-        conn.send(b"\x00\x00\x00\x01")
+        conn.sendall(b"\x00\x00\x00\x01")
 
 
 class VNCProto8():
     def doSecurityHandshake(self, conn):
         # Send Security Handshake
         # list of 1 security type, it is 1=="None"
-        conn.send(b"\x01\x01")
+        conn.sendall(b"\x01\x01")
 
         # Recv Chosen security type
         got = conn.recv(1)
         assert(b"\x01" == got)
 
         # Send SecurityResult
-        conn.send(b"\x00\x00\x00\x00")
+        conn.sendall(b"\x00\x00\x00\x00")
 
 
 sel = selectors.DefaultSelector()
@@ -340,7 +340,7 @@ hid_mouse_fh = None
 def _doVersion(conn):
     """Send and Recv the client/server versions"""
     version = b"RFB 003.008\n"
-    conn.send(version)
+    conn.sendall(version)
 
     # TODO: blocks waiting for response
     got = conn.recv(1024).strip()
