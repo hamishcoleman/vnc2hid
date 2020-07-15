@@ -354,16 +354,14 @@ def _doVersion(conn):
     return VNCProto3()
 
 
-def read(conn, mask):
-    result = vnc.read(conn)
-    if not result:
-        sel.unregister(conn)
-
-
 class SelectorHandler():
     def __init__(self):
         self.selector = None
         self.socket = None
+
+    def unregister(self):
+        if self.selector is not None:
+            self.selector.unregister(self.socket)
 
     def enregister(self, selector):
         """Add ourselves to the given selector object"""
@@ -392,7 +390,17 @@ class SelectorHandlerListener(SelectorHandler):
         self.socket = sock
 
 
-class ListenVNC(SelectorHandlerListener):
+class VNCConn(SelectorHandler):
+    def handle_event(self, events):
+        if events != selectors.EVENT_READ:
+            raise ValueError("Unexpected event value")
+
+        result = vnc.read(self.socket)
+        if not result:
+            self.unregister()
+
+
+class VNCListen(SelectorHandlerListener):
     def handle_event(self, events):
         if events != selectors.EVENT_READ:
             raise ValueError("Unexpected event value")
@@ -409,7 +417,10 @@ class ListenVNC(SelectorHandlerListener):
         vnc.sendServerInit(conn)
 
         # conn.setblocking(False)
-        self.selector.register(conn, selectors.EVENT_READ, read)
+
+        handler = VNCConn()
+        handler.socket = conn
+        handler.enregister(self.selector)
 
 
 def main():
@@ -450,17 +461,13 @@ def main():
     # bind address
     host = ''
 
-    listen = ListenVNC(host, port)
+    listen = VNCListen(host, port)
     listen.enregister(sel)
 
     while True:
         events = sel.select()
         for key, mask in events:
-            if isinstance(key.data, ListenVNC):
-                key.data.handle_event(mask)
-            else:
-                callback = key.data
-                callback(key.fileobj, mask)
+            key.data.handle_event(mask)
 
 
 if __name__ == "__main__":
