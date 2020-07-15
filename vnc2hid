@@ -312,46 +312,9 @@ class VNCProto():
         return True
 
 
-class VNCProto3():
-    def doSecurityHandshake(self, conn):
-        # 1==no authentication
-        conn.sendall(b"\x00\x00\x00\x01")
-
-
-class VNCProto8():
-    def doSecurityHandshake(self, conn):
-        # Send Security Handshake
-        # list of 1 security type, it is 1=="None"
-        conn.sendall(b"\x01\x01")
-
-        # Recv Chosen security type
-        got = conn.recv(1)
-        assert(b"\x01" == got)
-
-        # Send SecurityResult
-        conn.sendall(b"\x00\x00\x00\x00")
-
-
-sel = selectors.DefaultSelector()
 vnc = VNCProto()
 hid_key_fh = None
 hid_mouse_fh = None
-
-
-def _doVersion(conn):
-    """Send and Recv the client/server versions"""
-    version = b"RFB 003.008\n"
-    conn.sendall(version)
-
-    # TODO: blocks waiting for response
-    got = conn.recv(1024).strip()
-    print("Client Version:{}", got)
-
-    if (got == b'RFB 003.008'):
-        return VNCProto8()
-
-    # The standard says "if you dont know the proto, it is probably 3.3"
-    return VNCProto3()
 
 
 class SelectorHandler():
@@ -374,6 +337,13 @@ class SelectorHandler():
         self.selector = selector
         selector.register(self.socket, selectors.EVENT_READ, self)
 
+    def modify(self, events, data=None):
+        if self.selector is None:
+            raise ValueError("No selector known")
+        if data is None:
+            data = self
+        self.selector.modify(self.socket, events, data)
+
     def handle_event(self, events):
         raise ValueError("Unimplemented class")
 
@@ -390,14 +360,10 @@ class SelectorHandlerListener(SelectorHandler):
         self.socket = sock
 
 
-class VNCConn(SelectorHandler):
-    def handle_event(self, events):
-        if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event type")
-
-        result = vnc.read(self.socket)
-        if not result:
-            self.unregister()
+class SelectorHandlerConnection(SelectorHandler):
+    def __init__(self, selector, socket):
+        self.selector = selector
+        self.socket = socket
 
 
 class VNCListen(SelectorHandlerListener):
@@ -407,20 +373,84 @@ class VNCListen(SelectorHandlerListener):
 
         conn, addr = self.socket.accept()
 
-        auth = _doVersion(conn)
-        auth.doSecurityHandshake(conn)
+        newobject = VNCProtoUnk(conn)
+        newobject.register(self.selector)
+
+
+class VNCProtoMain(SelectorHandlerConnection):
+    def handle_event(self, events):
+        if events != selectors.EVENT_READ:
+            raise ValueError("Unexpected event type")
+
+        result = vnc.read(self.socket)
+        if not result:
+            self.unregister()
+
+
+class VNCClientInit(SelectorHandlerConnection):
+    def handle_event(self, events):
+        if events != selectors.EVENT_READ:
+            raise ValueError("Unexpected event type")
 
         # Recv ClientInit
-        conn.recv(1)
+        self.socket.recv(1)
         # we dont care what the sharing state is..
 
-        vnc.sendServerInit(conn)
+        vnc.sendServerInit(self.socket)
 
-        # conn.setblocking(False)
+        newstate = VNCProtoMain(self.selector, self.socket)
+        self.modify(selectors.EVENT_READ, newstate)
 
-        handler = VNCConn()
-        handler.socket = conn
-        handler.register(self.selector)
+
+class VNCProto8(SelectorHandlerConnection):
+    def handle_event(self, events):
+        if events != selectors.EVENT_READ:
+            raise ValueError("Unexpected event type")
+
+        # Recv Chosen security type
+        got = self.socket.recv(1)
+        assert(b"\x01" == got)
+
+        # Send SecurityResult
+        self.socket.sendall(b"\x00\x00\x00\x00")
+
+        newstate = VNCClientInit(self.selector, self.socket)
+        self.modify(selectors.EVENT_READ, newstate)
+
+
+class VNCProtoUnk(SelectorHandlerConnection):
+    def __init__(self, socket):
+        super().__init__(None, socket)
+
+        version = b"RFB 003.008\n"
+        socket.sendall(version)
+
+    def handle_event(self, events):
+        if events != selectors.EVENT_READ:
+            raise ValueError("Unexpected event type")
+
+        got = self.socket.recv(1024).strip()
+        print("Client Version:{}", got)
+
+        if (got == b'RFB 003.008'):
+            # Send Security Handshake
+            # list of 1 security type, it is 1=="None"
+            self.socket.sendall(b"\x01\x01")
+
+            newstate = VNCProto8(self.selector, self.socket)
+            self.modify(selectors.EVENT_READ, newstate)
+            return
+
+        # The standard says "if you dont know the proto, it is probably 3.3"
+
+        # protocol 3.3 doesnt require us to wait to listen for any data, so
+        # we can complete the auth and move on to normal VNC protocol
+
+        # 1==no authentication
+        self.socket.sendall(b"\x00\x00\x00\x01")
+
+        newstate = VNCClientInit(self.selector, self.socket)
+        self.modify(selectors.EVENT_READ, newstate)
 
 
 def main():
@@ -457,6 +487,8 @@ def main():
     if len(sys.argv):
         hid_mouse = sys.argv.pop(0)
         hid_mouse_fh = open(hid_mouse, "wb")
+
+    sel = selectors.DefaultSelector()
 
     # bind address
     host = ''
