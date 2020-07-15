@@ -363,13 +363,13 @@ class SelectorHandler():
         if self.selector is not None:
             self.selector.unregister(self.socket)
 
-    def enregister(self, selector):
+    def register(self, selector):
         """Add ourselves to the given selector object"""
 
         if self.socket is None:
-            raise ValueError("Need a socket before enregister")
+            raise ValueError("Need a socket before register")
         if self.selector is not None:
-            raise ValueError("Can only enregister with one selector")
+            raise ValueError("Can only register with one selector")
 
         self.selector = selector
         selector.register(self.socket, selectors.EVENT_READ, self)
@@ -420,7 +420,7 @@ class VNCListen(SelectorHandlerListener):
 
         handler = VNCConn()
         handler.socket = conn
-        handler.enregister(self.selector)
+        handler.register(self.selector)
 
 
 def main():
@@ -462,7 +462,7 @@ def main():
     host = ''
 
     listen = VNCListen(host, port)
-    listen.enregister(sel)
+    listen.register(sel)
 
     while True:
         events = sel.select()
