@@ -275,7 +275,7 @@ class VNCProto():
         buf = conn.recv(5)
         buttons, x, y = struct.unpack("!BHH", buf)
 
-        usb_buttons = buttons & 1 | (buttons & 2)<<1 | (buttons & 4)>>1
+        usb_buttons = buttons & 1 | (buttons & 2) << 1 | (buttons & 4) >> 1
 
         wheel = 0
         if buttons & 0x08:
@@ -288,8 +288,8 @@ class VNCProto():
 
         global width
         global height
-        scaled_x = int(32768/width) *x
-        scaled_y = int(32768/height) *y
+        scaled_x = int(32768 / width) * x
+        scaled_y = int(32768 / height) * y
 
         report = struct.pack("<BHHb", usb_buttons, scaled_x, scaled_y, wheel)
 
@@ -336,6 +336,7 @@ sel = selectors.DefaultSelector()
 vnc = VNCProto()
 hid_key_fh = None
 hid_mouse_fh = None
+
 
 def _doVersion(conn):
     """Send and Recv the client/server versions"""
