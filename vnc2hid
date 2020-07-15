@@ -354,26 +354,62 @@ def _doVersion(conn):
     return VNCProto3()
 
 
-def accept(sock, mask):
-    conn, addr = sock.accept()
-
-    auth = _doVersion(conn)
-    auth.doSecurityHandshake(conn)
-
-    # Recv ClientInit
-    conn.recv(1)
-    # we dont care what the sharing state is..
-
-    vnc.sendServerInit(conn)
-
-    # conn.setblocking(False)
-    sel.register(conn, selectors.EVENT_READ, read)
-
-
 def read(conn, mask):
     result = vnc.read(conn)
     if not result:
         sel.unregister(conn)
+
+
+class SelectorHandler():
+    def __init__(self):
+        self.selector = None
+        self.socket = None
+
+    def enregister(self, selector):
+        """Add ourselves to the given selector object"""
+
+        if self.socket is None:
+            raise ValueError("Need a socket before enregister")
+        if self.selector is not None:
+            raise ValueError("Can only enregister with one selector")
+
+        self.selector = selector
+        selector.register(self.socket, selectors.EVENT_READ, self)
+
+    def handle_event(self, events):
+        raise ValueError("Unimplemented class")
+
+
+class SelectorHandlerListener(SelectorHandler):
+    def __init__(self, host, port):
+        super().__init__()
+
+        sock = socket.socket()
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+        sock.listen(3)
+        sock.setblocking(False)
+        self.socket = sock
+
+
+class ListenVNC(SelectorHandlerListener):
+    def handle_event(self, events):
+        if events != selectors.EVENT_READ:
+            raise ValueError("Unexpected event value")
+
+        conn, addr = self.socket.accept()
+
+        auth = _doVersion(conn)
+        auth.doSecurityHandshake(conn)
+
+        # Recv ClientInit
+        conn.recv(1)
+        # we dont care what the sharing state is..
+
+        vnc.sendServerInit(conn)
+
+        # conn.setblocking(False)
+        self.selector.register(conn, selectors.EVENT_READ, read)
 
 
 def main():
@@ -414,19 +450,17 @@ def main():
     # bind address
     host = ''
 
-    sock = socket.socket()
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((host, port))
-    sock.listen(3)
-    sock.setblocking(False)
-
-    sel.register(sock, selectors.EVENT_READ, accept)
+    listen = ListenVNC(host, port)
+    listen.enregister(sel)
 
     while True:
         events = sel.select()
         for key, mask in events:
-            callback = key.data
-            callback(key.fileobj, mask)
+            if isinstance(key.data, ListenVNC):
+                key.data.handle_event(mask)
+            else:
+                callback = key.data
+                callback(key.fileobj, mask)
 
 
 if __name__ == "__main__":
