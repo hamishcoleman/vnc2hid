@@ -5,8 +5,8 @@ Expected to be paired with a tool like x2vnc.
 
 # Hardware required
 
-This has been tested with an Orangepi Zero, but it should also work with
-a Raspberry Pi Zero W (or any other Linux device with USB device port and
+This has been tested on both an Orangepi Zero and a Raspberry Pi Zero W
+(but it should work on any other Linux device with USB device port and
 a UDC driver)
 
 - In these steps, the Linux system running the vnc2hid is refered to as
