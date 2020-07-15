@@ -393,7 +393,7 @@ class SelectorHandlerListener(SelectorHandler):
 class VNCConn(SelectorHandler):
     def handle_event(self, events):
         if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event value")
+            raise ValueError("Unexpected event type")
 
         result = vnc.read(self.socket)
         if not result:
@@ -403,7 +403,7 @@ class VNCConn(SelectorHandler):
 class VNCListen(SelectorHandlerListener):
     def handle_event(self, events):
         if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event value")
+            raise ValueError("Unexpected event type")
 
         conn, addr = self.socket.accept()
 
