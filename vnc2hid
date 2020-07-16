@@ -345,7 +345,10 @@ class SelectorHandler():
         self.selector.modify(self.socket, events, data)
 
     def handle_event(self, events):
-        raise ValueError("Unimplemented class")
+        if events & selectors.EVENT_READ:
+            self.handle_read()
+        if events & selectors.EVENT_WRITE:
+            self.handle_write()
 
 
 class SelectorHandlerListener(SelectorHandler):
@@ -367,10 +370,7 @@ class SelectorHandlerConnection(SelectorHandler):
 
 
 class VNCListen(SelectorHandlerListener):
-    def handle_event(self, events):
-        if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event type")
-
+    def handle_read(self):
         conn, addr = self.socket.accept()
 
         newobject = VNCProtoUnk(conn)
@@ -378,20 +378,14 @@ class VNCListen(SelectorHandlerListener):
 
 
 class VNCProtoMain(SelectorHandlerConnection):
-    def handle_event(self, events):
-        if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event type")
-
+    def handle_read(self):
         result = vnc.read(self.socket)
         if not result:
             self.unregister()
 
 
 class VNCClientInit(SelectorHandlerConnection):
-    def handle_event(self, events):
-        if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event type")
-
+    def handle_read(self):
         # Recv ClientInit
         self.socket.recv(1)
         # we dont care what the sharing state is..
@@ -403,10 +397,7 @@ class VNCClientInit(SelectorHandlerConnection):
 
 
 class VNCProto8(SelectorHandlerConnection):
-    def handle_event(self, events):
-        if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event type")
-
+    def handle_read(self):
         # Recv Chosen security type
         got = self.socket.recv(1)
         assert(b"\x01" == got)
@@ -425,10 +416,7 @@ class VNCProtoUnk(SelectorHandlerConnection):
         version = b"RFB 003.008\n"
         socket.sendall(version)
 
-    def handle_event(self, events):
-        if events != selectors.EVENT_READ:
-            raise ValueError("Unexpected event type")
-
+    def handle_read(self):
         got = self.socket.recv(1024).strip()
         print("Client Version:{}", got)
 
