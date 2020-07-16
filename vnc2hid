@@ -217,10 +217,9 @@ class VNCProto():
             downstr, key, self.keys_shift
         ))
 
-        global hid_key_fh
-        if hid_key_fh is not None:
-            hid_key_fh.write(report)
-            hid_key_fh.flush()
+        global hid_key_obj
+        if hid_key_obj is not None:
+            hid_key_obj.write(report)
 
         return True
 
@@ -312,7 +311,7 @@ class VNCProto():
 
 
 vnc = VNCProto()
-hid_key_fh = None
+hid_key_obj = None
 hid_mouse_obj = None
 
 
@@ -505,6 +504,27 @@ class HIDMouseAbs(SelectorHandlerConnection):
         self.send(data)
 
 
+class HIDKeyboard(SelectorHandlerConnection):
+    def __init__(self, selector, socket):
+        super().__init__(None, socket)
+
+        self.register(selector)
+
+    def handle_write(self):
+        if len(self.send_q):
+            data = self.send_q.popleft()
+
+            self.socket.write(data)
+            # TODO: we are not nonblocking
+
+        # Either way, recalculate our event mask
+        self.modify()
+
+    def send_report(self, data):
+        # TODO: move creation of the report packet into this object
+        self.send(data)
+
+
 def main():
     if len(sys.argv) < 4:
         print(__doc__)
@@ -530,11 +550,12 @@ def main():
 
     sel = selectors.DefaultSelector()
 
-    global hid_key_fh
+    global hid_key_obj
 
     if len(sys.argv):
         hid_key = sys.argv.pop(0)
-        hid_key_fh = open(hid_key, "wb")
+        fh = open(hid_key, "r+b", buffering=0)
+        hid_key_obj = HIDKeyboard(sel, fh)
 
     global hid_mouse_obj
 
