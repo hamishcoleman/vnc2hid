@@ -9,7 +9,7 @@ import sys
 import selectors
 import socket
 
-import queue
+import collections
 import struct
 import binascii
 
@@ -369,12 +369,12 @@ class SelectorHandlerConnection(SelectorHandler):
     def __init__(self, selector, socket):
         self.selector = selector
         self.socket = socket
-        self.send_q = queue.SimpleQueue()
+        self.send_q = collections.deque()
 
     def _events(self):
         """Calculate what event mask to use"""
         events = selectors.EVENT_READ
-        if not self.send_q.empty():
+        if len(self.send_q):
             events |= selectors.EVENT_WRITE
         return events
 
@@ -401,21 +401,20 @@ class SelectorHandlerConnection(SelectorHandler):
         self.send_q = None
 
     def handle_write(self):
-        if not self.send_q.empty():
-            data = self.send_q.get()
+        if len(self.send_q):
+            data = self.send_q.popleft()
 
             self.socket.sendall(data)
             # TODO:
-            # - sendall can block - should send once and split remaining for
-            #   the next writable event.  but the queue library doesnt have
-            #   a "unshift" method
+            # - should switch to send() and requeue partially sent data for
+            #   the next writable event.
 
         # Either way, recalculate our event mask
         self.modify()
 
     def send(self, data):
         """Enqueue a send buffer and update the event mask"""
-        self.send_q.put(data)
+        self.send_q.append(data)
         self.modify()
 
 
