@@ -28,6 +28,14 @@ send USB information to the host
 The setup steps are only needed to be done straight after bootup and will
 persist until the next boot.
 
+## Raspberry Pi
+
+Some of the Raspberry Pi boards have a USB Device port.  All the Zeros have
+the correct connector as well and can be quickly used.  The model A devices
+and the Raspberry Pi 4 USB-C connector can also be used.
+
+To enable the device port, edit your `/boot/config.txt` to add `dtoverlay=dwc2`
+
 # Normal usage
 
 Run the `./vnc2hid` program with no options to get a simple usage summary.
