@@ -219,7 +219,7 @@ class VNCProto():
 
         global hid_key_obj
         if hid_key_obj is not None:
-            hid_key_obj.write(report)
+            hid_key_obj.send(report)
 
         return True
 
