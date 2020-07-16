@@ -337,13 +337,6 @@ class SelectorHandler():
         self.selector = selector
         selector.register(self.socket, selectors.EVENT_READ, self)
 
-    def modify(self, events, data=None):
-        if self.selector is None:
-            raise ValueError("No selector known")
-        if data is None:
-            data = self
-        self.selector.modify(self.socket, events, data)
-
     def handle_event(self, events):
         if events & selectors.EVENT_READ:
             self.handle_read()
@@ -377,6 +370,13 @@ class SelectorHandlerConnection(SelectorHandler):
     def __init__(self, selector, socket):
         self.selector = selector
         self.socket = socket
+
+    def modify(self, events, data=None):
+        if self.selector is None:
+            raise ValueError("No selector known")
+        if data is None:
+            data = self
+        self.selector.modify(self.socket, events, data)
 
 
 class VNCProtoMain(SelectorHandlerConnection):
