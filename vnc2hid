@@ -540,7 +540,7 @@ def main():
 
     if len(sys.argv):
         hid_mouse = sys.argv.pop(0)
-        fh = open(hid_mouse, "r+b")
+        fh = open(hid_mouse, "r+b", buffering=0)
         hid_mouse_obj = HIDMouseAbs(sel, fh)
 
     # bind address
