@@ -9,6 +9,7 @@ import sys
 import selectors
 import socket
 
+import queue
 import struct
 import binascii
 
@@ -73,7 +74,7 @@ class VNCProto():
             len(name)
         )
         buf += name
-        conn.sendall(buf)
+        conn.send(buf)
 
     def recv_SetPixelFormat(self, conn):
         conn.recv(19)
@@ -361,22 +362,61 @@ class SelectorHandlerListener(SelectorHandler):
 
     def handle_read(self):
         conn, addr = self.socket.accept()
-
-        newobject = self.connclass(conn)
-        newobject.register(self.selector)
+        self.connclass(self.selector, conn)
 
 
 class SelectorHandlerConnection(SelectorHandler):
     def __init__(self, selector, socket):
         self.selector = selector
         self.socket = socket
+        self.send_q = queue.SimpleQueue()
 
-    def modify(self, events, data=None):
+    def _events(self):
+        """Calculate what event mask to use"""
+        events = selectors.EVENT_READ
+        if not self.send_q.empty():
+            events |= selectors.EVENT_WRITE
+        return events
+
+    def modify(self, data=None):
+        """Maybe change the type for this filehandle, set current event mask"""
         if self.selector is None:
             raise ValueError("No selector known")
         if data is None:
             data = self
-        self.selector.modify(self.socket, events, data)
+
+        self.selector.modify(self.socket, self._events(), data)
+
+    def replace(self, newobject):
+        """Allow state machine transition by replacing the object"""
+        # TODO:
+        # - if any of the classes modify the properties, we are fragile
+        newobject.selector = self.selector
+        newobject.socket = self.socket
+        newobject.send_q = self.send_q
+
+        self.modify(newobject)
+        self.selector = None
+        self.socket = None
+        self.send_q = None
+
+    def handle_write(self):
+        if not self.send_q.empty():
+            data = self.send_q.get()
+
+            self.socket.sendall(data)
+            # TODO:
+            # - sendall can block - should send once and split remaining for
+            #   the next writable event.  but the queue library doesnt have
+            #   a "unshift" method
+
+        # Either way, recalculate our event mask
+        self.modify()
+
+    def send(self, data):
+        """Enqueue a send buffer and update the event mask"""
+        self.send_q.put(data)
+        self.modify()
 
 
 class VNCProtoMain(SelectorHandlerConnection):
@@ -392,10 +432,10 @@ class VNCClientInit(SelectorHandlerConnection):
         self.socket.recv(1)
         # we dont care what the sharing state is..
 
-        vnc.sendServerInit(self.socket)
+        vnc.sendServerInit(self)
 
         newstate = VNCProtoMain(self.selector, self.socket)
-        self.modify(selectors.EVENT_READ, newstate)
+        self.replace(newstate)
 
 
 class VNCProto8(SelectorHandlerConnection):
@@ -405,18 +445,19 @@ class VNCProto8(SelectorHandlerConnection):
         assert(b"\x01" == got)
 
         # Send SecurityResult
-        self.socket.sendall(b"\x00\x00\x00\x00")
+        self.send(b"\x00\x00\x00\x00")
 
         newstate = VNCClientInit(self.selector, self.socket)
-        self.modify(selectors.EVENT_READ, newstate)
+        self.replace(newstate)
 
 
 class VNCProtoUnk(SelectorHandlerConnection):
-    def __init__(self, socket):
+    def __init__(self, selector, socket):
         super().__init__(None, socket)
+        self.register(selector)
 
         version = b"RFB 003.008\n"
-        socket.sendall(version)
+        self.send(version)
 
     def handle_read(self):
         got = self.socket.recv(1024).strip()
@@ -425,10 +466,10 @@ class VNCProtoUnk(SelectorHandlerConnection):
         if (got == b'RFB 003.008'):
             # Send Security Handshake
             # list of 1 security type, it is 1=="None"
-            self.socket.sendall(b"\x01\x01")
+            self.send(b"\x01\x01")
 
             newstate = VNCProto8(self.selector, self.socket)
-            self.modify(selectors.EVENT_READ, newstate)
+            self.replace(newstate)
             return
 
         # The standard says "if you dont know the proto, it is probably 3.3"
@@ -437,10 +478,10 @@ class VNCProtoUnk(SelectorHandlerConnection):
         # we can complete the auth and move on to normal VNC protocol
 
         # 1==no authentication
-        self.socket.sendall(b"\x00\x00\x00\x01")
+        self.send(b"\x00\x00\x00\x01")
 
         newstate = VNCClientInit(self.selector, self.socket)
-        self.modify(selectors.EVENT_READ, newstate)
+        self.replace(newstate)
 
 
 def main():
