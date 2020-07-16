@@ -520,6 +520,10 @@ class HIDKeyboard(SelectorHandlerConnection):
         # Either way, recalculate our event mask
         self.modify()
 
+    def handle_read(self):
+        got = self.socket.read(1024)
+        print("KeyboardReport", got)
+
     def send_report(self, data):
         # TODO: move creation of the report packet into this object
         self.send(data)
