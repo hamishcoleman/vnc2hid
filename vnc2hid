@@ -352,7 +352,9 @@ class SelectorHandler():
 
 
 class SelectorHandlerListener(SelectorHandler):
-    def __init__(self, host, port):
+    """Open a socket, listen and create new objects for each connection"""
+
+    def __init__(self, host, port, connclass):
         super().__init__()
 
         sock = socket.socket()
@@ -362,19 +364,19 @@ class SelectorHandlerListener(SelectorHandler):
         sock.setblocking(False)
         self.socket = sock
 
+        self.connclass = connclass
+
+    def handle_read(self):
+        conn, addr = self.socket.accept()
+
+        newobject = self.connclass(conn)
+        newobject.register(self.selector)
+
 
 class SelectorHandlerConnection(SelectorHandler):
     def __init__(self, selector, socket):
         self.selector = selector
         self.socket = socket
-
-
-class VNCListen(SelectorHandlerListener):
-    def handle_read(self):
-        conn, addr = self.socket.accept()
-
-        newobject = VNCProtoUnk(conn)
-        newobject.register(self.selector)
 
 
 class VNCProtoMain(SelectorHandlerConnection):
@@ -481,7 +483,7 @@ def main():
     # bind address
     host = ''
 
-    listen = VNCListen(host, port)
+    listen = SelectorHandlerListener(host, port, VNCProtoUnk)
     listen.register(sel)
 
     while True:
